@@ -1,9 +1,7 @@
 import cron from 'node-cron'
 import { ProcessPayload, ResultArray } from '../types';
-// import chalk from "chalk";
-import express from "express";
-const app = express()
-
+import chalk from "chalk";
+import fs, { constants } from "fs" 
 
 function getDateTime() {
     let dateInstance = new Date();
@@ -12,9 +10,23 @@ function getDateTime() {
     return [date,time];
 }
 
+function writeCheckResultsToFile(results:string,filename: string) {
+    const header = "Date          Time        Endpoint                 Method   Status";
+    fs.access(filename+".txt",constants.F_OK,(err) => {
+        if(err) {
+            results = header + results;
+        }
+        fs.appendFile(filename+".txt",results,function (err) {
+            if(err) {
+                console.log(chalk.bgRedBright.white.bold("Error occured exporting api health logs"))
+            }
+            console.log(chalk.bgGreenBright.white.bold(`Api health logs exported successfully to ${filename}.txt`))
+        }) 
+    })
+    
+}
+
 function formatEndpointChecksResult(resultArray: ResultArray[]) {
-    // const header = "Date>10          Time>8        Endpoint>17                 Method>3   Status"
-    const header = "Date          Time        Endpoint                 Method   Status"
     let content = "";
     
     for (let result of resultArray) {
@@ -23,10 +35,9 @@ function formatEndpointChecksResult(resultArray: ResultArray[]) {
     return content;
 }
 
-async function runProcess(payload: ProcessPayload){
+async function runProcess(payload: ProcessPayload,exportfilename?: string){
     const healthArray: ResultArray[] = []
     for (let endpoint of payload.endpoints) {
-
         const tempArray:[string,string,number?,string?,string?] = [endpoint[0],endpoint[1]];
         try {
             const request = endpoint[1] == 'GET' ? await fetch(`${payload.baseUrl}${endpoint[0]}`) 
@@ -45,12 +56,15 @@ async function runProcess(payload: ProcessPayload){
     const failingEndpoints = healthArray.filter((response) => response[2] == 400 || response[2] == 500).map((instance) => {
         return instance.slice(0,3)
     });
+    if(exportfilename) {
+        return writeCheckResultsToFile(result,exportfilename)
+    }
     console.log(result)
 }
 
 function intervalProcessing(interval:string){
     const cleanedIntervalString =  interval.trim()
-    const timeValue = +cleanedIntervalString.slice(0,cleanedIntervalString.length -2);
+    const timeValue = +cleanedIntervalString.slice(0,cleanedIntervalString.length - 1);
     const timeUnit = cleanedIntervalString.charAt(cleanedIntervalString.length-1);
     let cronRepresentation;
     switch (timeUnit){
@@ -70,10 +84,15 @@ function intervalProcessing(interval:string){
     return cronRepresentation;
 }
 
-module.exports = function startHealthCheck(payload:ProcessPayload,timeInterval:string) {
+
+/**
+ * Starts monitoring all provided api endpoints.
+ * @param payload
+ * @param timeInterval
+ * @param exportfilename
+ */
+ export default function startHealthCheck(payload:ProcessPayload,timeInterval:string,exportfilename?:string) {
+    exportfilename ?? console.log(chalk.bgYellow.bold.red("Date          Time        Endpoint                 Method   Status"))
     const interval = intervalProcessing(timeInterval);
-    cron.schedule(interval,() => {runProcess(payload)});
-}
-
-
-console.log("Date          Time        Endpoint                 Method   Status")
+    cron.schedule(interval,() => {runProcess(payload,exportfilename)});
+ }
