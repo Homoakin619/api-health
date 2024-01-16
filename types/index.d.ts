@@ -18,4 +18,12 @@ declare type ProcessPayload = {
     endpoints: [string,string,object?][];
 }
 
-export {ResultArray,ProcessPayload}
+/**
+ * Starts monitoring all provided api endpoints.
+ * @param payload
+ * @param timeInterval
+ */
+declare function startHealthCheck(payload:ProcessPayload,timeInterval:string): void
+
+
+export {ResultArray,ProcessPayload,startHealthCheck}
